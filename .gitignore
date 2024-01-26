@@ -1,0 +1,5 @@
+/.env
+/.venv
+/clients.db
+/token
+/__pycache__
