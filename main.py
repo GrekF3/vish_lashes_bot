@@ -16,7 +16,7 @@ async def client_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NAME
     
     # Получаем записи из базы данных
-    clients = database.get_clients()
+    clients = database.get_clients(user_id=update.effective_user.id)
 
     if clients:
         # Отправляем информацию о каждом клиенте с кнопкой "Изменить запись" и "Удалить запись"
@@ -47,7 +47,7 @@ async def handle_delete_button(update: Update, context: ContextTypes.DEFAULT_TYP
     client_id = int(query.data.split('_')[1])
 
     # Удаляем запись из базы данных
-    database.delete_client(client_id)
+    database.delete_client(client_id=client_id, user_id=update.effective_user.id)
 
     # Удаляем сообщение с информацией о клиенте и кнопками
     await context.bot.delete_message(chat_id=query.message.chat_id, message_id=query.message.message_id)
@@ -143,7 +143,7 @@ async def get_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Устанавливаем задачу на напоминание за час до записи
     job_context = {'chat_id': update.effective_chat.id, 'client_info': get_client_info(context.user_data)}
-    context.job_queue.run_once(send_reminder, appointment_datetime - timedelta(hours=1), context=job_context)
+    context.job_queue.run_once(send_reminder, appointment_datetime - timedelta(minutes=30), context=job_context)
 
     # Вызываем функцию для отправки информации о клиенте
     await get_client(update, context)
@@ -181,7 +181,7 @@ async def get_time_inline_keyboard(update: Update, context: ContextTypes.DEFAULT
     # Если дата выбрана, проверяем доступные часы на этот день
     if selected_date:
         # Получаем занятые часы для выбранной даты из базы данных
-        occupied_hours = get_occupied_hours(selected_date)
+        occupied_hours = get_occupied_hours(selected_date,user_id=update.effective_user.id)
         print(f'Occupied Hours: {occupied_hours}')
 
         # Фильтруем доступные часы
@@ -202,13 +202,13 @@ async def get_time_inline_keyboard(update: Update, context: ContextTypes.DEFAULT
     return TIME
 
 
-def get_occupied_hours(selected_date):
+def get_occupied_hours(selected_date, user_id):
     # Здесь вам нужно получить из базы данных список часов, которые уже заняты для выбранной даты
     # Например, используя функцию get_clients_from_database()
     occupied_hours = []
 
     # Получаем записи из базы данных
-    clients = database.get_clients()
+    clients = database.get_clients(user_id)
 
     # Форматируем дату в строку для сравнения
     selected_date_str = datetime.strptime(selected_date, '%d.%m').strftime('%d.%m')
@@ -247,7 +247,7 @@ async def get_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await context.bot.send_message(chat_id=update.effective_chat.id, text=client_info)
 
-    database.add_client(context.user_data)
+    database.add_client(data=context.user_data, user_id=update.effective_user.id)
     # Очищаем данные пользователя
     context.user_data.clear()
 
@@ -255,6 +255,19 @@ async def get_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return NAME
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    user_id = update.effective_user.id
+    db_path = f'databases/{user_id}_clients.db'
+    db_folder = 'databases'
+
+    if not os.path.exists(db_folder):
+        os.makedirs(db_folder)
+
+
+    if not os.path.exists(db_path):
+        database.create_user_table(user_id)
+
+
     keyboard = [
         [KeyboardButton("Добавить клиента"), KeyboardButton("Мои записи")]
     ]
@@ -262,7 +275,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data['editing_client'] = False
 
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="Привет! Я бот для записи твоих клиенток на реснички!", reply_markup=reply_markup)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Привет! Я бот для записи твоих клиенток на реснички! \n\nТвой уникальный номер: {update.effective_user.id}", reply_markup=reply_markup)
 
 def main():
 
