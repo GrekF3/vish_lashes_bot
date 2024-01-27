@@ -103,14 +103,26 @@ async def get_date_inline_keyboard(update: Update, context: ContextTypes.DEFAULT
     current_date = datetime.now()
 
     # Получаем следующие 6 дней
-    dates = [current_date + timedelta(days=i + 0) for i in range(6)]
+    dates = [current_date + timedelta(days=i) for i in range(6)]
 
     # Форматируем дни и месяцы в строки
     formatted_dates = [date.strftime('%d.%m') for date in dates]
 
-    # Создаем кнопки с датами
+    # Проверяем доступность времени на выбранные даты
+    available_dates = []
+    for date in formatted_dates:
+        occupied_hours = get_occupied_hours(date, user_id=update.effective_user.id)
+        if current_date.hour >= 22 or (current_date.date() == datetime.strptime(date, '%d.%m').date() and current_date.hour >= 22) or len(occupied_hours) < 7:
+            available_dates.append(date)
+
+    # Если нет доступных дат, сообщаем об этом и завершаем процесс
+    if not available_dates:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Извините, все временные слоты на следующие 6 дней уже заняты.")
+        return None
+
+    # Создаем кнопки только для доступных дат
     keyboard = [
-        [InlineKeyboardButton(date, callback_data=f'date_{date}') for date in formatted_dates]
+        [InlineKeyboardButton(date, callback_data=f'date_{date}') for date in available_dates]
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
